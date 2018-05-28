@@ -3,7 +3,8 @@
 """Merge an assembler file and the referenced source code.
 
 GCC outputs .file and .loc markers in its assembly output. This program
-re-inserts the source code from the referenced locations."""
+re-inserts the source code from the referenced locations and unmangles
+the C++ identifiers."""
 
 import codecs
 import subprocess
@@ -12,6 +13,7 @@ import re
 import os
 
 CHARSET = 'cp1252'
+CXXFILT = ['/usr/bin/c++filt', '-_']
 
 
 class SrcMerger(object):
@@ -23,6 +25,7 @@ class SrcMerger(object):
     def merge(self, asm, merged):
         self.out = []
         self.files = {}
+        mangled = set()
 
         for l in codecs.open(asm):
             if any(l.startswith(s) for s in self.skipped):
@@ -37,8 +40,11 @@ class SrcMerger(object):
                 continue
             if l == 'Letext0:\n':
                 break
+            mangled.update(self.mangled_re.findall(l))
             self.out.append(l)
         self.out = ''.join(self.out)
+        if mangled:
+            self.unmangle(mangled)
         with open(merged, 'w') as out:
             out.write(self.out)
         if merged.endswith('+'):
@@ -52,6 +58,19 @@ class SrcMerger(object):
         lines = self.files.get(filenr)
         if lines and linenr <= len(lines):
             self.out.append(';\t\t+++\t' + lines[linenr])
+
+    def unmangle(self, mangled):
+        # sort the longest names first to avoid common prefix problems
+        mangled = sorted(mangled, key=len, reverse=True)
+        try:
+            stdout = subprocess.check_output(CXXFILT + mangled,
+                universal_newlines=True
+            )
+        except subprocess.CalledProcessError:
+            return
+        stdout = stdout.replace('> >', '>>')
+        for m, u in zip(mangled, stdout.split('\n')):
+            self.out = self.out.replace(m, u)
 
 
 if __name__ == '__main__':
