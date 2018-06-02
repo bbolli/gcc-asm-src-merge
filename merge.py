@@ -47,8 +47,6 @@ class SrcMerger(object):
             self.unmangle(mangled)
         with open(merged, 'w') as out:
             out.write(self.out)
-        if merged.endswith('+'):
-            os.rename(merged, asm)
 
     def do_file(self, nr, name):
         # print(';\t\t===\t', nr, name)
@@ -79,5 +77,6 @@ if __name__ == '__main__':
     if sys.argv:
         for f in sys.argv:
             sm.merge(f, f + '+')
+            os.rename(f + '+', f)
     else:
         sm.merge('/dev/stdin', '/dev/stdout')
